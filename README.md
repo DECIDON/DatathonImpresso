@@ -31,3 +31,4 @@ for block in session.blocks:          # tous les blocs, dans l'ordre de lecture
 | Notebook | Objet |
 | --- | --- |
 | `01_chunks.ipynb` | Découpage des séances en prises de parole → `output/<chambre>/<ark>/chunk_NNNN.json` |
+| `02_timeline_rubriques.ipynb` | Timeline interactive des rubriques de l'ordre du jour et de leurs orateurs, par chambre → `output/timeline/` |
