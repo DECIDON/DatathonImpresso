@@ -1,19 +1,25 @@
 [project]
-name = "impresso-chunks"
+name = "datathon-impresso"
 version = "0.1.0"
-description = "Extraction des prises de parole (chunks) des débats parlementaires OCR + NER"
+description = "Expérimentations Impresso sur les débats parlementaires du JORF (OCR + NER)"
 authors = [
     { name = "Bertrand Duménieu", email = "bertrand.dumenieu@ehess.fr" }
 ]
 requires-python = ">=3.13"
 readme = "README.md"
 dependencies = [
-    "loguru>=0.7.3",
-    "rich>=15.0.0",
+    "pandas>=2.2",
+    "pydantic>=2.9",
 ]
 
-[project.scripts]
-impresso-chunks = "impresso_chunks.cli:main"
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29",
+    "jupyterlab>=4.2",
+]
+
+[tool.uv.build-backend]
+module-name = "debats"
 
 [build-system]
 requires = ["uv_build>=0.11.26,<0.12.0"]
