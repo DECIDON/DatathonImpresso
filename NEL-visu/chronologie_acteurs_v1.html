@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Chronologie des acteurs — Journal officiel et presse</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#12151c; --panel:#1a1e27; --panel-2:#20242f;
+    --line:#2c3140; --line-strong:#3a4155;
+    --text:#e9e7de; --text-2:#9ba0ae; --text-3:#6b7180;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--ink); color:var(--text);
+    font-family:'Inter',sans-serif;
+    background-image: radial-gradient(circle, #232838 1px, transparent 1px);
+    background-size:22px 22px;
+  }
+  header{
+    padding:32px 40px 20px; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(18,21,28,0.95), rgba(18,21,28,0.6));
+  }
+  h1{ font-family:'Fraunces',serif; font-weight:500; font-size:28px; margin:0 0 6px; letter-spacing:-0.01em; }
+  .sub{ color:var(--text-2); font-size:14px; }
+  .wrap{ max-width:1500px; margin:0 auto; padding:0 40px 40px; }
+  .toolbar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:22px 0 16px; }
+  .chip{
+    font-family:'IBM Plex Mono',monospace; font-size:12.5px;
+    padding:8px 16px; border-radius:999px; border:1px solid var(--line-strong);
+    background:var(--panel); color:var(--text-2); cursor:pointer;
+    transition:all .15s ease; user-select:none;
+  }
+  .chip:hover{ border-color:var(--text-3); color:var(--text); }
+  .chip.active{ color:var(--ink); border-color:transparent; font-weight:500; }
+  .spacer{ flex:1; }
+  .fileBtn{
+    font-family:'IBM Plex Mono',monospace; font-size:12.5px;
+    padding:8px 16px; border-radius:6px; border:1px dashed var(--line-strong);
+    background:transparent; color:var(--text-2); cursor:pointer;
+  }
+  .fileBtn:hover{ color:var(--text); border-color:var(--text-3); }
+  input[type=file]{ display:none; }
+  .stats{
+    display:flex; gap:24px; flex-wrap:wrap; font-family:'IBM Plex Mono',monospace;
+    font-size:12px; color:var(--text-3); margin:0 0 16px;
+  }
+  .stats b{ color:var(--text-2); font-weight:500; }
+  .side{ display:flex; align-items:center; gap:10px; margin:0 0 14px; font-size:12px; color:var(--text-3); flex-wrap:wrap; }
+  .side label{ display:flex; align-items:center; gap:6px; cursor:pointer; }
+  input[type=range]{ width:140px; accent-color:var(--text-2); }
+  input[type=checkbox]{ accent-color:var(--text-2); }
+  select, input[type=search], .btn{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--line-strong);
+    border-radius:6px; padding:5px 8px; font-family:'IBM Plex Mono',monospace; font-size:12px;
+  }
+  .btn{ cursor:pointer; }
+  .btn:hover{ border-color:var(--text-3); }
+  input[type=search]{ width:170px; }
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    overflow:auto; position:relative; max-height:78vh;
+  }
+  svg{ display:block; }
+  .row-label{ font-family:'Inter',sans-serif; font-size:11.5px; fill:var(--text-2); cursor:pointer; }
+  .row-label:hover{ fill:var(--text); }
+  .row-label.hot{ fill:var(--text); font-weight:600; }
+  .gridline{ stroke:var(--line); stroke-width:1; }
+  .axis-label{ font-family:'IBM Plex Mono',monospace; font-size:11px; fill:var(--text-3); }
+  .lane-bg{ fill:transparent; }
+  .lane-bg:hover{ fill:#ffffff08; }
+  .dot{ stroke:#0e1016; stroke-width:1; cursor:pointer; fill-opacity:.92; }
+  .dot.dim{ opacity:0.12; }
+  .tooltip{
+    position:fixed; pointer-events:none; background:var(--panel-2);
+    border:1px solid var(--line-strong); border-radius:6px; padding:8px 12px;
+    font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text);
+    opacity:0; transition:opacity .1s; z-index:10; max-width:320px;
+  }
+  .tooltip .t-name{ font-family:'Inter',sans-serif; font-weight:600; font-size:13px; margin-bottom:4px; }
+  .tooltip .t-muted{ color:var(--text-3); }
+  .tooltip ul{ margin:4px 0 0; padding-left:16px; color:var(--text-2); }
+  .legend{ display:flex; gap:18px; margin-top:14px; font-size:12px; color:var(--text-3); align-items:center; flex-wrap:wrap; }
+  .legend-dot{ display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; vertical-align:-1px; }
+  .hint{ margin-top:10px; font-size:11.5px; color:var(--text-3); font-family:'IBM Plex Mono',monospace; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap" style="padding:0;">
+    <h1>Chronologie des acteurs cités</h1>
+    <div class="sub">Apparition et récurrence des acteurs (identifiés par leur Wikidata ID) au fil des jours — Journal officiel et presse</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="toolbar" id="toolbar"></div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="side">
+    <span>Cités au moins</span>
+    <input type="range" id="minFreq" min="1" max="15" value="1">
+    <span id="minFreqVal">1</span>
+    <span>fois</span>
+    <input type="search" id="search" placeholder="Rechercher un acteur…">
+    <span>Afficher</span>
+    <select id="topN">
+      <option value="30">top 30</option>
+      <option value="60" selected>top 60</option>
+      <option value="120">top 120</option>
+      <option value="100000">tous</option>
+    </select>
+    <span>Trier par</span>
+    <select id="sortMode">
+      <option value="freq">fréquence totale</option>
+      <option value="first">première apparition</option>
+      <option value="alpha">alphabétique</option>
+    </select>
+    <span style="flex:1"></span>
+    <label><input type="checkbox" id="speakersOnly"> orateurs parlementaires (presse)</label>
+    <label><input type="checkbox" id="acceptedOnly"> JO : liens « accepted » uniquement</label>
+  </div>
+
+  <div class="side">
+    <button class="btn" id="zoomIn">＋ zoom</button>
+    <button class="btn" id="zoomOut">－ zoom</button>
+    <button class="btn" id="zoomReset">réinitialiser</button>
+    <span class="hint" style="margin:0">Ctrl/⌘ + molette pour zoomer · glisser pour se déplacer · clic sur un nom pour isoler · clic sur un point : Wikidata</span>
+  </div>
+
+  <div class="panel">
+    <svg id="chart"></svg>
+  </div>
+  <div class="tooltip" id="tooltip"></div>
+
+  <div class="legend" id="legend"></div>
+  <div class="hint" id="source"></div>
+</div>
+
+<script>
+/* ============================================================
+   Localisation française pour d3 (axes de dates)
+   ============================================================ */
+d3.timeFormatDefaultLocale({
+  dateTime:"%A %e %B %Y à %X", date:"%d/%m/%Y", time:"%H:%M:%S", periods:["AM","PM"],
+  days:["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"],
+  shortDays:["dim.","lun.","mar.","mer.","jeu.","ven.","sam."],
+  months:["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"],
+  shortMonths:["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."]
+});
+
+/* ============================================================
+   Données de démonstration : les 4 lignes d'exemple fournies
+   (remplacées dès qu'on charge le fichier .xlsx ou .json)
+   ============================================================ */
+const DEMO_RAW = {
+  NEL_JO: [
+    {document_id:"1934-01-09_chambre_bpt6k6428548r", document_date:"1934-01-09", chamber:"chambre",
+     text:"Jean Deschanel", labels:"PER", status:"accepted", person_name:"Jean, Louis, Camille, Emile Deschanel",
+     wikidata_qid:"Q3171703", wikidata_url:"https://www.wikidata.org/wiki/Q3171703"},
+    {document_id:"1934-01-09_chambre_bpt6k6428548r", document_date:"1934-01-09", chamber:"chambre",
+     text:"Jean Zay", labels:"PER", status:"accepted", person_name:"Jean Zay",
+     wikidata_qid:"Q713487", wikidata_url:"https://www.wikidata.org/wiki/Q713487"}
+  ],
+  NEL_PRESSE: [
+    {article_id:"alsacefrancaise-1934-03-04-a-i0010", article_date:"1934-03-04", newspaper:"L'Alsace française (Strasbourg)",
+     article_title:"Chronique de la guerre", item_type:"ar", wikidata_qid:"Q314957", press_person_label:"Maurice Barrès",
+     mention_count:1, person_name:"Maurice, Auguste Barrès", is_parliamentary_speaker:0},
+    {article_id:"alsacefrancaise-1934-03-04-a-i0010", article_date:"1934-03-04", newspaper:"L'Alsace française (Strasbourg)",
+     article_title:"Chronique de la guerre", item_type:"ar", wikidata_qid:"Q275053", press_person_label:"Émile Driant",
+     mention_count:1, person_name:"Emile Driant", is_parliamentary_speaker:0}
+  ]
+};
+
+/* ============================================================
+   Normalisation : NEL_JO + NEL_PRESSE  ->  liste de "citations"
+   ============================================================ */
+const parseDate = d3.timeParse("%Y-%m-%d");
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const trim = v => (v === undefined || v === null) ? "" : String(v).trim();
+
+function toISODate(v){
+  if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+  if (typeof v === "number" && isFinite(v))            // numéro de série Excel
+    return new Date(Math.round((v - 25569) * 86400000)).toISOString().slice(0,10);
+  const s = trim(v);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);     // jj/mm/aaaa
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+}
+
+function chamberLabel(c){
+  const k = trim(c).toLowerCase();
+  if (k.startsWith("chamb")) return "JO · Chambre";
+  if (k.startsWith("sen") || k.startsWith("sén")) return "JO · Sénat";
+  return k ? "JO · " + k.charAt(0).toUpperCase() + k.slice(1) : "JO";
+}
+
+function normalize(raw){
+  const records = [];
+  (raw.NEL_JO || []).forEach(r => {
+    const qid = trim(r.wikidata_qid), date = toISODate(r.document_date);
+    if (!qid || !date) return;
+    records.push({
+      qid, date, kind:"jo", support: chamberLabel(r.chamber),
+      label: trim(r.person_name) || trim(r.text) || qid,
+      altName: trim(r.person_name), count: 1,
+      detail: trim(r.text) ? "« " + trim(r.text) + " »" : trim(r.document_id),
+      url: trim(r.wikidata_url) || `https://www.wikidata.org/wiki/${qid}`,
+      status: trim(r.status).toLowerCase(), speaker: false
+    });
+  });
+  (raw.NEL_PRESSE || []).forEach(r => {
+    const qid = trim(r.wikidata_qid), date = toISODate(r.article_date);
+    if (!qid || !date) return;
+    records.push({
+      qid, date, kind:"presse", support: trim(r.newspaper) || "Presse (inconnu)",
+      label: trim(r.press_person_label) || trim(r.person_name) || qid,
+      altName: trim(r.person_name),
+      count: Number(r.mention_count) > 0 ? Number(r.mention_count) : 1,
+      detail: trim(r.article_title) || trim(r.article_id),
+      url: `https://www.wikidata.org/wiki/${qid}`,
+      status: "", speaker: ["1","true","vrai","oui"].includes(trim(r.is_parliamentary_speaker).toLowerCase())
+    });
+  });
+  records.forEach(r => r.dateObj = parseDate(r.date));
+  const valid = records.filter(r => r.dateObj);
+
+  // nom d'affichage par acteur : on privilégie le libellé presse (plus court), sinon le nom JO
+  const labelOf = new Map();
+  valid.filter(r => r.kind === "presse").forEach(r => { if(!labelOf.has(r.qid)) labelOf.set(r.qid, r.label); });
+  valid.forEach(r => { if(!labelOf.has(r.qid)) labelOf.set(r.qid, r.label); });
+  valid.forEach(r => r.label = labelOf.get(r.qid));
+
+  // supports : JO d'abord, puis presse par volume décroissant
+  const volume = d3.rollup(valid, v => d3.sum(v, d => d.count), d => d.support);
+  const kindOf = new Map(valid.map(r => [r.support, r.kind]));
+  const supports = Array.from(volume.keys()).sort((a,b) => {
+    const ka = kindOf.get(a) === "jo" ? 0 : 1, kb = kindOf.get(b) === "jo" ? 0 : 1;
+    return ka - kb || volume.get(b) - volume.get(a);
+  });
+  return { records: valid, supports, labelOf, hasStatus: valid.some(r => r.status) };
+}
+
+/* ============================================================
+   État et couleurs
+   ============================================================ */
+let DATA = normalize(DEMO_RAW);
+let sourceName = "données de démonstration (4 lignes d'exemple)";
+let currentSupport = "__all__";
+let minFreq = 1, topN = 60, sortMode = "freq", searchTerm = "";
+let speakersOnly = false, acceptedOnly = false, focusQid = null;
+let colors = {};
+
+const PRESS_PALETTE = ["#5b8def","#e0574c","#c9a227","#e88a3c","#4fb3bf","#b07be0","#8fc65a","#e06fa3","#7f8fa6","#d2b48c"];
+function assignColors(){
+  colors = {}; let i = 0;
+  DATA.supports.forEach(s => {
+    if (s === "JO · Chambre") colors[s] = "#7bc4a4";
+    else if (s === "JO · Sénat") colors[s] = "#c3a6e0";
+    else if (s.startsWith("JO")) colors[s] = "#d9d3c0";
+    else colors[s] = PRESS_PALETTE[i++ % PRESS_PALETTE.length];
+  });
+}
+
+const svg = d3.select("#chart");
+const tooltip = d3.select("#tooltip");
+let zoomBehavior = null;
+
+/* ============================================================
+   Interface : puces, légende
+   ============================================================ */
+function buildToolbar(){
+  const tb = document.getElementById("toolbar");
+  const chips = [`<span class="chip" data-s="__all__">Tous supports</span>`]
+    .concat(DATA.supports.map(s => `<span class="chip" data-s="${esc(s)}">${esc(s)}</span>`));
+  tb.innerHTML = chips.join("") +
+    `<div class="spacer"></div>
+     <label class="fileBtn" for="fileInput">Charger le fichier Excel (.xlsx) ou JSON</label>
+     <input type="file" id="fileInput" accept=".xlsx,.xls,.json,application/json">`;
+  document.getElementById("fileInput").addEventListener("change", onFile);
+  paintChips();
+}
+function paintChips(){
+  document.querySelectorAll(".chip").forEach(c => {
+    const on = c.dataset.s === currentSupport;
+    c.classList.toggle("active", on);
+    c.style.background = on ? (c.dataset.s === "__all__" ? "#e9e7de" : (colors[c.dataset.s] || "#9ba0ae")) : "";
+  });
+}
+function buildLegend(){
+  document.getElementById("legend").innerHTML = DATA.supports.map(s =>
+    `<span><span class="legend-dot" style="background:${colors[s]}"></span>${esc(s)}</span>`
+  ).join("") + `<span style="color:var(--text-3)">· taille du point = nombre de mentions ce jour-là</span>`;
+}
+
+/* ============================================================
+   Rendu
+   ============================================================ */
+function render(){
+  const fmtDay = d3.timeFormat("%A %e %B %Y");
+
+  let recs = DATA.records.slice();
+  if (currentSupport !== "__all__") recs = recs.filter(r => r.support === currentSupport);
+  if (speakersOnly) recs = recs.filter(r => r.kind !== "presse" || r.speaker);
+  if (acceptedOnly) recs = recs.filter(r => r.kind !== "jo" || r.status === "accepted");
+
+  // agrégation : un point = acteur × jour × support
+  const aggMap = new Map();
+  recs.forEach(r => {
+    const key = r.qid + "|" + r.date + "|" + r.support;
+    let a = aggMap.get(key);
+    if (!a) { a = { qid:r.qid, label:r.label, date:r.date, dateObj:r.dateObj, support:r.support, count:0, items:[], url:r.url, alt:r.altName }; aggMap.set(key, a); }
+    a.count += r.count;
+    if (r.detail && a.items.length < 4 && !a.items.includes(r.detail)) a.items.push(r.detail);
+  });
+  let points = Array.from(aggMap.values());
+  const dateExtentAll = d3.extent(points, d => d.dateObj);
+
+  // fréquence par acteur dans la vue courante
+  const freq = d3.rollup(points, v => d3.sum(v, d => d.count), d => d.qid);
+  const maxFreq = freq.size ? d3.max(freq.values()) : 1;
+  const slider = document.getElementById("minFreq");
+  slider.max = Math.max(2, Math.min(maxFreq, 50));
+  if (minFreq > +slider.max) { minFreq = +slider.max; slider.value = minFreq; document.getElementById("minFreqVal").textContent = minFreq; }
+
+  const term = searchTerm.trim().toLowerCase();
+  let actors = Array.from(freq.keys()).filter(q => freq.get(q) >= minFreq);
+  if (term) actors = actors.filter(q => (DATA.labelOf.get(q) || "").toLowerCase().includes(term) || q.toLowerCase() === term);
+  actors.sort((a,b) => freq.get(b) - freq.get(a));
+  actors = actors.slice(0, topN);
+
+  if (sortMode === "first") {
+    const first = new Map();
+    points.forEach(p => { if(!first.has(p.qid) || p.dateObj < first.get(p.qid)) first.set(p.qid, p.dateObj); });
+    actors.sort((a,b) => first.get(a) - first.get(b) || freq.get(b) - freq.get(a));
+  } else if (sortMode === "alpha") {
+    actors.sort((a,b) => (DATA.labelOf.get(a)||"").localeCompare(DATA.labelOf.get(b)||"", "fr"));
+  }
+
+  const actorSet = new Set(actors);
+  points = points.filter(p => actorSet.has(p.qid));
+  const nbMentions = d3.sum(points, d => d.count);
+  const days = new Set(points.map(p => p.date)).size;
+
+  document.getElementById("stats").innerHTML =
+    `<span><b>${actors.length}</b> acteurs affichés (sur ${freq.size})</span>` +
+    `<span><b>${nbMentions}</b> mentions</span>` +
+    `<span><b>${days}</b> jours avec citations</span>` +
+    (dateExtentAll[0] ? `<span>du <b>${d3.timeFormat("%d/%m/%Y")(dateExtentAll[0])}</b> au <b>${d3.timeFormat("%d/%m/%Y")(dateExtentAll[1])}</b></span>` : "");
+  document.getElementById("source").textContent = "Source : " + sourceName;
+
+  // dimensions
+  const margin = {top:36, right:30, bottom:40, left:230};
+  const rowHeight = 26;
+  const width = Math.max(900, (svg.node().parentElement.clientWidth || 900) - 4);
+  const plotH = Math.max(actors.length - 1, 0) * rowHeight + rowHeight;
+  const height = plotH + margin.top + margin.bottom;
+  svg.attr("width", width).attr("height", height);
+  svg.on(".zoom", null);
+  svg.selectAll("*").remove();
+
+  if (actors.length === 0 || !dateExtentAll[0]) {
+    svg.attr("height", 90);
+    svg.append("text").attr("x", 30).attr("y", 40).attr("fill","#6b7180")
+      .attr("font-family","IBM Plex Mono, monospace").attr("font-size", 13)
+      .text("Aucun acteur ne correspond aux filtres actuels.");
+    return;
+  }
+
+  const innerW = width - margin.left - margin.right;
+  const x = d3.scaleTime()
+    .domain([d3.timeDay.offset(dateExtentAll[0], -1), d3.timeDay.offset(dateExtentAll[1], 1)])
+    .range([0, innerW]);
+  const y = d3.scalePoint().domain(actors).range([rowHeight/2, plotH - rowHeight/2]).padding(0);
+
+  svg.append("defs").append("clipPath").attr("id","plotClip")
+    .append("rect").attr("x",0).attr("y",-4).attr("width",innerW).attr("height",plotH+8);
+
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+  const gridG = g.append("g");
+  const axisTopG = g.append("g").attr("transform","translate(0,-6)");
+  const axisBotG = g.append("g").attr("transform",`translate(0,${plotH+6})`);
+
+  // lignes (lanes) + libellés
+  const lanes = g.selectAll(".lane").data(actors).join("g").attr("class","lane");
+  lanes.append("rect").attr("class","lane-bg")
+    .attr("x", -margin.left).attr("y", d => y(d) - rowHeight/2)
+    .attr("width", innerW + margin.left).attr("height", rowHeight);
+  const labels = lanes.append("text")
+    .attr("class", d => "row-label" + (freq.get(d) >= 0.5*maxFreq ? " hot" : ""))
+    .attr("x", -14).attr("y", d => y(d))
+    .attr("text-anchor","end").attr("dominant-baseline","middle")
+    .on("click", (e,d) => { focusQid = (focusQid === d) ? null : d; applyFocus(); });
+  labels.append("title").text(d => d + " — " + (DATA.labelOf.get(d)||""));
+  labels.text(d => { const t = DATA.labelOf.get(d) || d; return t.length > 32 ? t.slice(0,31)+"…" : t; });
+
+  // points (décalage vertical léger par support pour éviter les recouvrements)
+  const supIdx = new Map(DATA.supports.map((s,i) => [s,i]));
+  const dy = d => ((supIdx.get(d.support) % 3) - 1) * 5;
+  const radius = d => Math.min(11, 3.5 + 1.8*Math.sqrt(d.count));
+  const dotsG = g.append("g").attr("clip-path","url(#plotClip)");
+  const dots = dotsG.selectAll("circle").data(points).join("circle")
+    .attr("class","dot")
+    .attr("cy", d => y(d.qid) + dy(d))
+    .attr("r", radius)
+    .attr("fill", d => colors[d.support] || "#9ba0ae")
+    .on("mousemove", (event,d) => {
+      tooltip.style("opacity",1)
+        .style("left", Math.min(window.innerWidth - 340, event.clientX + 16) + "px")
+        .style("top", (event.clientY + 12) + "px")
+        .html(`<div class="t-name">${esc(d.label)}</div>
+               <div class="t-muted">${esc(d.qid)}${d.alt && d.alt !== d.label ? " · " + esc(d.alt) : ""}</div>
+               <div style="margin-top:4px">${esc(d.support)}</div>
+               <div>${esc(fmtDay(d.dateObj))}</div>
+               <div>${d.count} mention${d.count>1?"s":""}</div>
+               <ul>${d.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`);
+    })
+    .on("mouseleave", () => tooltip.style("opacity",0))
+    .on("click", (e,d) => window.open(d.url, "_blank", "noopener"));
+
+  // mise à jour des éléments dépendant de l'échelle x (initial + zoom)
+  function update(zx){
+    const ticks = zx.ticks(10);
+    gridG.selectAll("line").data(ticks).join("line")
+      .attr("class","gridline").attr("x1", d => zx(d)).attr("x2", d => zx(d))
+      .attr("y1", -4).attr("y2", plotH + 4);
+    axisTopG.call(d3.axisTop(zx).ticks(10).tickSizeOuter(0));
+    axisBotG.call(d3.axisBottom(zx).ticks(10).tickSizeOuter(0));
+    g.selectAll(".domain, .tick line").attr("stroke", "#3a4155");
+    g.selectAll(".tick text").attr("class","axis-label");
+    dots.attr("cx", d => zx(d.dateObj));
+  }
+  update(x);
+
+  // zoom horizontal
+  zoomBehavior = d3.zoom()
+    .scaleExtent([1, 120])
+    .extent([[0,0],[innerW,plotH]])
+    .translateExtent([[0,0],[innerW,plotH]])
+    .filter(e => e.type === "wheel" ? (e.ctrlKey || e.metaKey) : (!e.button && e.type !== "dblclick"))
+    .on("zoom", ev => update(ev.transform.rescaleX(x)));
+  svg.call(zoomBehavior);
+
+  applyFocus();
+}
+
+function applyFocus(){
+  svg.selectAll(".dot").classed("dim", d => focusQid && d.qid !== focusQid);
+  svg.selectAll(".row-label").classed("hot", d => d === focusQid);
+}
+
+/* ============================================================
+   Chargement de fichiers (.xlsx / .json)
+   ============================================================ */
+function rawFromWorkbook(wb){
+  const raw = { NEL_JO: [], NEL_PRESSE: [] };
+  wb.SheetNames.forEach(name => {
+    const up = name.toUpperCase();
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval:"" });
+    if (up.includes("PRESSE")) raw.NEL_PRESSE = rows;
+    else if (up.endsWith("JO") || up.includes("_JO") || up.includes("JO_")) raw.NEL_JO = rows;
+  });
+  return raw;
+}
+function rawFromJSON(obj){
+  const pick = (...keys) => { for (const k of keys) if (Array.isArray(obj[k])) return obj[k]; return []; };
+  return { NEL_JO: pick("NEL_JO","nel_jo","jo"), NEL_PRESSE: pick("NEL_PRESSE","nel_presse","presse") };
+}
+
+function onFile(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  const ext = file.name.split(".").pop().toLowerCase();
+  reader.onload = ev => {
+    try {
+      const raw = (ext === "json")
+        ? rawFromJSON(JSON.parse(ev.target.result))
+        : rawFromWorkbook(XLSX.read(ev.target.result, { type:"array" }));
+      if (!raw.NEL_JO.length && !raw.NEL_PRESSE.length) throw new Error("onglets NEL_JO / NEL_PRESSE introuvables ou vides");
+      loadData(raw, `${file.name} (${raw.NEL_JO.length.toLocaleString("fr")} lignes NEL_JO, ${raw.NEL_PRESSE.length.toLocaleString("fr")} lignes NEL_PRESSE)`);
+    } catch (err) { alert("Fichier illisible : " + err.message); }
+  };
+  if (ext === "json") reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
+function loadData(raw, name){
+  DATA = normalize(raw);
+  sourceName = name;
+  currentSupport = "__all__"; focusQid = null;
+  assignColors(); buildToolbar(); buildLegend(); render();
+}
+
+/* ============================================================
+   Événements
+   ============================================================ */
+document.getElementById("toolbar").addEventListener("click", e => {
+  const chip = e.target.closest(".chip");
+  if (!chip) return;
+  currentSupport = chip.dataset.s; paintChips(); render();
+});
+document.getElementById("minFreq").addEventListener("input", e => {
+  minFreq = +e.target.value; document.getElementById("minFreqVal").textContent = minFreq; render();
+});
+document.getElementById("topN").addEventListener("change", e => { topN = +e.target.value; render(); });
+document.getElementById("sortMode").addEventListener("change", e => { sortMode = e.target.value; render(); });
+document.getElementById("search").addEventListener("input", e => { searchTerm = e.target.value; render(); });
+document.getElementById("speakersOnly").addEventListener("change", e => { speakersOnly = e.target.checked; render(); });
+document.getElementById("acceptedOnly").addEventListener("change", e => { acceptedOnly = e.target.checked; render(); });
+document.getElementById("zoomIn").addEventListener("click", () => zoomBehavior && svg.transition().duration(200).call(zoomBehavior.scaleBy, 1.8));
+document.getElementById("zoomOut").addEventListener("click", () => zoomBehavior && svg.transition().duration(200).call(zoomBehavior.scaleBy, 1/1.8));
+document.getElementById("zoomReset").addEventListener("click", () => zoomBehavior && svg.transition().duration(200).call(zoomBehavior.transform, d3.zoomIdentity));
+window.addEventListener("resize", render);
+
+assignColors(); buildToolbar(); buildLegend(); render();
+</script>
+
+</body>
+</html>
