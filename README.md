@@ -31,3 +31,5 @@ for block in session.blocks:          # tous les blocs, dans l'ordre de lecture
 | Notebook | Objet |
 | --- | --- |
 | `01_chunks.ipynb` | Découpage des séances en prises de parole → `output/<chambre>/<ark>/chunk_NNNN.json` |
+| `03_topics_lda.ipynb` | Topics LDA des prises de parole, nommés par mots-clés et rubrique ; contrôle par les plongements (`data/chunk_embeddings.jsonl.gz`) → `output/topics/` |
+| `04_sankey_topics.ipynb` | Topics par date (Chambre + Sénat), reliés d'une date à la suivante dans un sankey interactif → `output/sankey/` |
