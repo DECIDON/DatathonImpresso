@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Chronologie des acteurs — presse et Journal officiel</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#12151c; --panel:#1a1e27; --panel-2:#20242f;
+    --line:#2c3140; --line-strong:#3a4155;
+    --text:#e9e7de; --text-2:#9ba0ae; --text-3:#6b7180;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--ink); color:var(--text);
+    font-family:'Inter',sans-serif;
+    background-image: radial-gradient(circle, #232838 1px, transparent 1px);
+    background-size:22px 22px;
+  }
+  header{
+    padding:32px 40px 20px; border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, rgba(18,21,28,0.95), rgba(18,21,28,0.6));
+  }
+  h1{ font-family:'Fraunces',serif; font-weight:500; font-size:28px; margin:0 0 6px; letter-spacing:-0.01em; }
+  .sub{ color:var(--text-2); font-size:14px; }
+  .wrap{ max-width:1500px; margin:0 auto; padding:0 40px 40px; }
+  .toolbar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:22px 0 16px; }
+  .chip{
+    font-family:'IBM Plex Mono',monospace; font-size:12.5px;
+    padding:8px 16px; border-radius:999px; border:1px solid var(--line-strong);
+    background:var(--panel); color:var(--text-2); cursor:pointer;
+    transition:all .15s ease; user-select:none;
+  }
+  .chip:hover{ border-color:var(--text-3); color:var(--text); }
+  .chip.active{ color:var(--ink); border-color:transparent; font-weight:500; background:var(--c, var(--text)); }
+  .chip.group{ border-style:dashed; }
+  .spacer{ flex:1; }
+  .btn{
+    font-family:'IBM Plex Mono',monospace; font-size:12.5px;
+    padding:8px 16px; border-radius:6px; border:1px dashed var(--line-strong);
+    background:transparent; color:var(--text-2); cursor:pointer; display:inline-block;
+  }
+  .btn:hover{ color:var(--text); border-color:var(--text-3); }
+  input[type=file]{ display:none; }
+  .stats{
+    display:flex; gap:24px; flex-wrap:wrap; font-family:'IBM Plex Mono',monospace;
+    font-size:12px; color:var(--text-3); margin:0 0 16px;
+  }
+  .stats b{ color:var(--text-2); font-weight:500; }
+  .side{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 0 14px; font-size:12px; color:var(--text-3); }
+  .side label.chk{ display:flex; align-items:center; gap:6px; cursor:pointer; color:var(--text-2); }
+  input[type=range]{ width:140px; accent-color:var(--text-2); }
+  input[type=checkbox]{ accent-color:var(--text-2); }
+  select, input[type=search]{
+    background:var(--panel-2); color:var(--text); border:1px solid var(--line-strong);
+    border-radius:6px; padding:5px 8px; font-family:'IBM Plex Mono',monospace; font-size:12px;
+  }
+  input[type=search]{ width:170px; }
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    overflow:auto; position:relative; max-height:78vh;
+  }
+  svg{ display:block; }
+  .axis-svg{ position:sticky; background:var(--panel); z-index:5; }
+  .axis-svg.top{ top:0; border-bottom:1px solid var(--line); }
+  .axis-svg.bottom{ bottom:0; border-top:1px solid var(--line); }
+  .row-label{ font-family:'Inter',sans-serif; font-size:11.5px; fill:var(--text-2); }
+  .row-label.hot{ fill:var(--text); font-weight:600; }
+  .gridline{ stroke:var(--line); stroke-width:1; }
+  .gridline.month{ stroke:var(--line-strong); }
+  .axis-label{ font-family:'IBM Plex Mono',monospace; font-size:11px; fill:var(--text-3); }
+  .lane-bg{ fill:transparent; }
+  .lane:hover .lane-bg{ fill:#ffffff08; }
+  .dot{ stroke:#0e1016; stroke-width:1; cursor:pointer; }
+  .tooltip{
+    position:absolute; pointer-events:none; background:var(--panel-2);
+    border:1px solid var(--line-strong); border-radius:6px; padding:8px 12px;
+    font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text);
+    opacity:0; transition:opacity .1s; z-index:10; max-width:320px;
+  }
+  .tooltip .t-name{ font-family:'Inter',sans-serif; font-weight:600; font-size:13px; margin-bottom:4px; }
+  .tooltip .t-dim{ color:var(--text-3); }
+  .tooltip .t-detail{ color:var(--text-2); margin-top:3px; font-size:11.5px; }
+  .legend{ display:flex; gap:18px; margin-top:14px; font-size:12px; color:var(--text-3); align-items:center; flex-wrap:wrap; }
+  .legend svg{ display:inline-block; vertical-align:-2px; margin-right:6px; }
+  .legend .sep{ width:1px; height:14px; background:var(--line-strong); }
+  .notice{ font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--text-3); margin:0 0 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap" style="padding:0;">
+    <h1>Chronologie des acteurs cités</h1>
+    <div class="sub">Apparition et récurrence des acteurs dans le temps, par jour, dans la presse et au Journal officiel</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="toolbar" id="toolbar"></div>
+
+  <div class="notice" id="notice"></div>
+  <div class="stats" id="stats"></div>
+
+  <div class="side">
+    <span>Acteurs cités au moins</span>
+    <input type="range" id="minFreq" min="1" max="15" value="1">
+    <span id="minFreqVal">1</span>
+    <span>fois</span>
+    <input type="search" id="search" placeholder="Rechercher un acteur…">
+    <label class="chk"><input type="checkbox" id="onlyBoth"> présents dans la presse ET au JO</label>
+    <span style="flex:1"></span>
+    <span>Trier par</span>
+    <select id="sortMode">
+      <option value="freq">fréquence</option>
+      <option value="first">première apparition</option>
+      <option value="alpha">alphabétique</option>
+    </select>
+  </div>
+
+  <div class="panel" id="panel">
+    <svg id="axisTop" class="axis-svg top"></svg>
+    <svg id="chart"></svg>
+    <svg id="axisBottom" class="axis-svg bottom"></svg>
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+</div>
+
+<script>
+/* =====================================================================
+   1. DONNÉES
+   Modèle interne : une ligne = une mention (acteur, jour, support)
+   { qid, label, date:"YYYY-MM-DD", support, source:"presse"|"jo",
+     count, detail, speaker }
+   ===================================================================== */
+
+// Petit jeu d'exemple (les 2 lignes de votre description) pour que la page s'affiche avant chargement.
+const DEMO_ROWS = [
+  {qid:"Q2117075", label:"Lucien Hubert", date:"1934-01-12", support:"JO · Sénat", source:"jo", count:1, detail:"« M. Lucien Hubert » — sénateur des Ardennes"},
+  {qid:"Q1229977", label:"Louis Marin", date:"1934-02-11", support:"L'Alsace française (Strasbourg)", source:"presse", count:1, detail:"Sujets d'actualité"},
+];
+
+let ROWS = DEMO_ROWS;         // lignes normalisées (avant filtres)
+let SKIPPED = 0;              // lignes sans QID
+let isDemo = true;
+
+/* ---------- Normalisation des dates ---------- */
+function normDate(v){
+  if(v === null || v === undefined || v === "") return null;
+  if(v instanceof Date) return v.toISOString().slice(0,10);
+  if(typeof v === "number"){                    // numéro de série Excel
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    return isNaN(d) ? null : d.toISOString().slice(0,10);
+  }
+  const s = String(v).trim();
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);    // JJ/MM/AAAA
+  if(m) return `${m[3]}-${m[2]}-${m[1]}`;
+  return null;
+}
+const cap = s => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+const str = v => (v === null || v === undefined) ? "" : String(v).trim();
+
+/* ---------- Lecture du classeur Excel ---------- */
+function rowsFromWorkbook(wb){
+  const find = (re) => wb.SheetNames.find(n => re.test(n));
+  const nameJO = find(/jo/i), namePR = find(/presse|press/i);
+  if(!nameJO && !namePR) throw new Error("Aucun onglet NEL_JO / NEL_PRESSE trouvé (onglets : " + wb.SheetNames.join(", ") + ")");
+  const out = []; let skipped = 0;
+
+  if(nameJO){
+    XLSX.utils.sheet_to_json(wb.Sheets[nameJO], {defval:""}).forEach(r => {
+      const qid = str(r.wikidata_qid), date = normDate(r.date);
+      if(!qid || !date){ skipped++; return; }
+      const full = (str(r.first_name) + " " + str(r.last_name)).trim();
+      const ch = str(r.chamber).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const chamber = ({senat:"Sénat", chambre:"Chambre"}[ch]) || cap(str(r.chamber)) || "?";
+      out.push({
+        qid, label: full || str(r.entity) || str(r.mention_text), date,
+        support: "JO · " + chamber, source: "jo", count: 1,
+        detail: `« ${str(r.mention_text)} »` + (str(r.top_mandate_position) ? ` — ${str(r.top_mandate_position)}` : "")
+      });
+    });
+  }
+  if(namePR){
+    XLSX.utils.sheet_to_json(wb.Sheets[namePR], {defval:""}).forEach(r => {
+      const qid = str(r.wikidata_qid), date = normDate(r.article_date);
+      if(!qid || !date){ skipped++; return; }
+      out.push({
+        qid, label: str(r.person_name) || str(r.press_person_label), date,
+        support: str(r.newspaper) || "Presse", source: "presse",
+        count: Number(r.mention_count) || 1,
+        detail: str(r.article_title) || str(r.article_id),
+        speaker: false
+      });
+    });
+  }
+  return {rows: out, skipped};
+}
+
+/* ---------- État de l'interface ---------- */
+let currentGroup = "__all__";      // "__all__" | "__presse__" | "__jo__" | nom de support
+let minFreq = 1, sortMode = "freq", searchTxt = "";
+let onlyBoth = false;
+
+// Couleurs fixes par support (reconnaissance sur le nom, sans accents ni casse)
+const FIXED_COLOR = (name) => {
+  const n = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  if(n.startsWith("jo") && n.includes("chambre")) return "#5fbf7a";   // vert
+  if(n.startsWith("jo") && n.includes("senat"))   return "#b9a1f0";   // lilas
+  if(n.includes("alsace"))   return "#5b8def";                         // bleu
+  if(n.includes("candide"))  return "#e0574c";                         // rouge
+  if(n.includes("canard"))   return "#f2c230";                         // jaune
+  if(n.includes("action fran")) return "#e88a3c";                      // orange
+  return null;
+};
+const PALETTE_AUTRES = ["#4fb6a6","#d66fa5","#7fb2d9","#c4795b","#8fbf5a","#9ba0ae"];
+let colorOf = {};
+
+d3.timeFormatDefaultLocale({
+  dateTime:"%A %e %B %Y à %X", date:"%d/%m/%Y", time:"%H:%M:%S", periods:["AM","PM"],
+  days:["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"],
+  shortDays:["dim.","lun.","mar.","mer.","jeu.","ven.","sam."],
+  months:["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"],
+  shortMonths:["janv.","févr.","mars","avr.","mai","juin","juil.","août","sept.","oct.","nov.","déc."]
+});
+
+const svg = d3.select("#chart");
+const axisTop = d3.select("#axisTop"), axisBottom = d3.select("#axisBottom");
+const AXIS_H = 30;
+const tooltip = d3.select("#tooltip");
+const panel = document.getElementById("panel");
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- Supports, couleurs, puces ---------- */
+function setupSupports(){
+  const sup = Array.from(d3.group(ROWS, d => d.support), ([k,v]) => ({name:k, source:v[0].source, n:v.length}))
+    .sort((a,b) => a.source.localeCompare(b.source) || b.n - a.n);
+  colorOf = {};
+  let ip = 0;
+  sup.forEach(s => { colorOf[s.name] = FIXED_COLOR(s.name) || PALETTE_AUTRES[ip++ % PALETTE_AUTRES.length]; });
+
+  const tb = document.getElementById("toolbar");
+  const chips = [`<span class="chip active" data-s="__all__">Tous supports</span>`];
+  if(sup.some(s => s.source === "presse")) chips.push(`<span class="chip group" data-s="__presse__" style="--c:var(--text)">Presse (tous)</span>`);
+  if(sup.some(s => s.source === "jo"))     chips.push(`<span class="chip group" data-s="__jo__" style="--c:var(--text)">Journal officiel (tous)</span>`);
+  sup.forEach(s => chips.push(`<span class="chip" data-s="${esc(s.name)}" style="--c:${colorOf[s.name]}">${esc(s.name)}</span>`));
+  chips.push(`<div class="spacer"></div>`);
+  chips.push(`<button class="btn" id="exportBtn">Exporter JSON</button>`);
+  chips.push(`<label class="btn" for="fileInput">Charger un fichier .xlsx / .json</label>`);
+  chips.push(`<input type="file" id="fileInput" accept=".xlsx,.xls,.json">`);
+  tb.innerHTML = chips.join("");
+  currentGroup = "__all__";
+  document.getElementById("fileInput").addEventListener("change", onFile);
+  document.getElementById("exportBtn").addEventListener("click", exportJSON);
+  buildLegend(sup);
+}
+
+function symbolPath(source, r){
+  return d3.symbol().type(d3.symbolCircle).size(Math.PI * r * r)();
+}
+
+function buildLegend(sup){
+  const html = sup.map(s =>
+    `<span><svg width="14" height="14" viewBox="-7 -7 14 14"><path d="${symbolPath(s.source,4.5)}" fill="${colorOf[s.name]}" stroke="#0e1016"/></svg>${esc(s.name)}</span>`
+  );
+  html.push(`<span class="sep"></span>`);
+  html.push(`<span>Taille = nombre de mentions ce jour-là · clic = fiche Wikidata</span>`);
+  document.getElementById("legend").innerHTML = html.join("");
+}
+
+/* =====================================================================
+   2. RENDU
+   ===================================================================== */
+function render(){
+  const parseDate = d3.timeParse("%Y-%m-%d");
+
+  // --- filtres de lignes ---
+  let rows = ROWS;
+
+  // acteurs présents dans les deux sources (calcul avant filtre de support)
+  let bothSet = null;
+  if(onlyBoth){
+    const inJo = new Set(rows.filter(r => r.source === "jo").map(r => r.qid));
+    const inPr = new Set(rows.filter(r => r.source === "presse").map(r => r.qid));
+    bothSet = new Set([...inJo].filter(q => inPr.has(q)));
+    rows = rows.filter(r => bothSet.has(r.qid));
+  }
+
+  // filtre support
+  if(currentGroup === "__presse__") rows = rows.filter(r => r.source === "presse");
+  else if(currentGroup === "__jo__") rows = rows.filter(r => r.source === "jo");
+  else if(currentGroup !== "__all__") rows = rows.filter(r => r.support === currentGroup);
+
+  // --- agrégation (acteur × support × jour) ---
+  const agg = new Map();
+  rows.forEach(r => {
+    const k = r.qid + "|" + r.support + "|" + r.date;
+    let a = agg.get(k);
+    if(!a){ a = {qid:r.qid, date:r.date, dateObj:parseDate(r.date), support:r.support, source:r.source, count:0, details:[]}; agg.set(k,a); }
+    a.count += r.count;
+    if(r.detail && !a.details.includes(r.detail)) a.details.push(r.detail);
+  });
+  let points = Array.from(agg.values()).filter(p => p.dateObj);
+
+  // libellé par QID (on privilégie person_name : premier libellé non vide)
+  const labelOf = new Map();
+  ROWS.forEach(r => { if(r.label && !labelOf.has(r.qid)) labelOf.set(r.qid, r.label); });
+  const lab = q => labelOf.get(q) || q;
+
+  // fréquence par acteur dans la vue
+  const freq = d3.rollup(points, v => d3.sum(v, d => d.count), d => d.qid);
+  const q = searchTxt.trim().toLowerCase();
+  let actors = Array.from(freq.keys()).filter(a => freq.get(a) >= minFreq &&
+    (!q || lab(a).toLowerCase().includes(q) || a.toLowerCase() === q));
+
+  if(sortMode === "freq") actors.sort((a,b) => freq.get(b) - freq.get(a) || lab(a).localeCompare(lab(b)));
+  else if(sortMode === "first"){
+    const first = new Map();
+    points.forEach(p => { if(!first.has(p.qid) || p.dateObj < first.get(p.qid)) first.set(p.qid, p.dateObj); });
+    actors.sort((a,b) => first.get(a) - first.get(b) || freq.get(b) - freq.get(a));
+  } else actors.sort((a,b) => lab(a).localeCompare(lab(b)));
+
+  const keep = new Set(actors);
+  points = points.filter(p => keep.has(p.qid));
+
+  // curseur de fréquence : borne max dynamique
+  const maxF = Math.max(1, d3.max(freq.values()) || 1);
+  const slider = document.getElementById("minFreq");
+  slider.max = Math.min(60, maxF);
+
+  const nDays = new Set(points.map(p => p.date)).size;
+  document.getElementById("stats").innerHTML =
+    `<span><b>${actors.length}</b> acteurs affichés</span>` +
+    `<span><b>${d3.sum(points, p => p.count)}</b> mentions</span>` +
+    `<span><b>${nDays}</b> jours avec mention</span>`;
+  document.getElementById("notice").textContent =
+    (isDemo ? "Données d'exemple (2 lignes) — chargez votre fichier Excel avec le bouton en haut à droite. " : "") +
+    (SKIPPED ? `${SKIPPED} lignes ignorées (sans identifiant Wikidata ou sans date).` : "");
+
+  // --- géométrie ---
+  const margin = {top:10, right:30, bottom:10, left:230};
+  const rowHeight = 28;
+  const container = (panel.clientWidth || 1000) - 4;
+  svg.selectAll("*").remove(); axisTop.selectAll("*").remove(); axisBottom.selectAll("*").remove();
+  axisTop.attr("height", 0); axisBottom.attr("height", 0);
+
+  if(actors.length === 0){
+    svg.attr("width", container).attr("height", 90);
+    svg.append("text").attr("x", 30).attr("y", 40).attr("fill","#6b7180")
+       .attr("font-family","IBM Plex Mono, monospace").attr("font-size", 13)
+       .text("Aucun acteur ne correspond aux filtres actuels.");
+    return;
+  }
+
+  let [d0, d1] = d3.extent(points, d => d.dateObj);
+  d0 = d3.timeDay.offset(d0, -1); d1 = d3.timeDay.offset(d1, 1);
+  const spanDays = Math.max(1, d3.timeDay.count(d0, d1));
+  const width = Math.max(900, container, Math.min(6000, margin.left + margin.right + spanDays * 14));
+  const innerWidth = width - margin.left - margin.right;
+  const innerHeight = actors.length * rowHeight;
+  svg.attr("width", width).attr("height", innerHeight + margin.top + margin.bottom);
+
+  const x = d3.scaleTime().domain([d0, d1]).range([0, innerWidth]);
+  const y = d3.scaleBand().domain(actors).range([0, innerHeight]);
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  // grille : lundis (ou mois si période longue) ; traits plus marqués pour les débuts de mois
+  const interval = spanDays <= 200 ? d3.timeMonday.every(1) : d3.timeMonth.every(spanDays > 900 ? 6 : 1);
+  const ticks = x.ticks(interval);
+  g.append("g").selectAll("line").data(ticks).join("line")
+    .attr("class", d => "gridline" + (d.getDate() === 1 ? " month" : ""))
+    .attr("x1", d => x(d)).attr("x2", d => x(d)).attr("y1", -margin.top).attr("y2", innerHeight + margin.bottom);
+
+  const fmt = spanDays <= 200 ? d3.timeFormat("%d %b") : d3.timeFormat("%b %Y");
+  axisTop.attr("width", width).attr("height", AXIS_H);
+  axisBottom.attr("width", width).attr("height", AXIS_H);
+  axisTop.append("g").attr("transform", `translate(${margin.left},${AXIS_H - 1})`)
+    .call(d3.axisTop(x).tickValues(ticks).tickFormat(fmt));
+  axisBottom.append("g").attr("transform", `translate(${margin.left},0)`)
+    .call(d3.axisBottom(x).tickValues(ticks).tickFormat(fmt));
+  [axisTop, axisBottom].forEach(a => {
+    a.selectAll("text").attr("class","axis-label");
+    a.selectAll(".domain, .tick line").attr("stroke", "#3a4155");
+  });
+
+  // lanes + libellés
+  const hotThreshold = Math.max(15, d3.quantile(Array.from(freq.values()).sort(d3.ascending), 0.9) || 15);
+  const lanes = g.selectAll(".lane").data(actors).join("g").attr("class","lane");
+  lanes.append("rect").attr("class","lane-bg")
+    .attr("x", -margin.left).attr("y", d => y(d))
+    .attr("width", innerWidth + margin.left).attr("height", rowHeight);
+  lanes.append("text")
+    .attr("class", d => "row-label" + (freq.get(d) >= hotThreshold ? " hot" : ""))
+    .attr("x", -14).attr("y", d => y(d) + rowHeight/2)
+    .attr("text-anchor","end").attr("dominant-baseline","middle")
+    .text(d => { const t = lab(d); return t.length > 32 ? t.slice(0,31) + "…" : t; })
+    .append("title").text(d => `${lab(d)} (${d}) — ${freq.get(d)} mentions`);
+
+  // décalage vertical par support pour séparer les points d'un même jour
+  const supInView = Array.from(new Set(points.map(p => p.support))).sort();
+  const nS = supInView.length;
+  const step = nS > 1 ? Math.min(5, 14 / (nS - 1)) : 0;
+  const dy = s => (supInView.indexOf(s) - (nS - 1)/2) * step;
+  const radius = c => Math.min(10, 4 + 1.6 * Math.sqrt(c - 1));
+
+  g.append("g").selectAll("path").data(points).join("path")
+    .attr("class","dot")
+    .attr("d", d => symbolPath(d.source, radius(d.count)))
+    .attr("transform", d => `translate(${x(d.dateObj)},${y(d.qid) + rowHeight/2 + dy(d.support)})`)
+    .attr("fill", d => colorOf[d.support] || "#9ba0ae")
+    .on("mousemove", (event, d) => {
+      const [px, py] = d3.pointer(event, svg.node());
+      const more = d.details.length > 4 ? `<div class="t-detail t-dim">… +${d.details.length - 4} autres</div>` : "";
+      tooltip.html(
+        `<div class="t-name">${esc(lab(d.qid))}</div>` +
+        `<div class="t-dim">${esc(d.qid)}</div>` +
+        `<div>${esc(d.support)}</div>` +
+        `<div>${esc(d.date)} · ${d.count} mention${d.count > 1 ? "s" : ""}</div>` +
+        d.details.slice(0,4).map(t => `<div class="t-detail">${esc(t.length > 110 ? t.slice(0,109) + "…" : t)}</div>`).join("") + more
+      ).style("opacity", 1);
+      const tw = tooltip.node().offsetWidth;
+      const rightEdge = panel.scrollLeft + panel.clientWidth;
+      const left = (px + 16 + tw > rightEdge) ? px - tw - 16 : px + 16;
+      tooltip.style("left", Math.max(4, left) + "px").style("top", (py + AXIS_H + 10) + "px");
+    })
+    .on("mouseleave", () => tooltip.style("opacity", 0))
+    .on("click", (event, d) => window.open("https://www.wikidata.org/wiki/" + d.qid, "_blank", "noopener"));
+}
+
+/* =====================================================================
+   3. ÉVÉNEMENTS
+   ===================================================================== */
+document.getElementById("toolbar").addEventListener("click", (e) => {
+  const chip = e.target.closest(".chip");
+  if(!chip) return;
+  document.querySelectorAll(".chip").forEach(c => c.classList.remove("active"));
+  chip.classList.add("active");
+  currentGroup = chip.dataset.s;
+  render();
+});
+document.getElementById("minFreq").addEventListener("input", (e) => {
+  minFreq = +e.target.value;
+  document.getElementById("minFreqVal").textContent = minFreq;
+  render();
+});
+document.getElementById("sortMode").addEventListener("change", (e) => { sortMode = e.target.value; render(); });
+document.getElementById("search").addEventListener("input", (e) => { searchTxt = e.target.value; render(); });
+document.getElementById("onlyBoth").addEventListener("change", (e) => { onlyBoth = e.target.checked; render(); });
+
+function loadRows(rows, skipped){
+  ROWS = rows; SKIPPED = skipped || 0; isDemo = false;
+  minFreq = 1;
+  document.getElementById("minFreq").value = 1;
+  document.getElementById("minFreqVal").textContent = 1;
+  setupSupports();
+  render();
+}
+
+function onFile(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  const isJson = /\.json$/i.test(file.name);
+  reader.onload = (ev) => {
+    try{
+      if(isJson){
+        const j = JSON.parse(ev.target.result);
+        const rows = Array.isArray(j) ? j : j.rows;
+        if(!Array.isArray(rows)) throw new Error("JSON attendu : un tableau, ou {rows:[…]} (format de l'export)");
+        loadRows(rows, j.skipped);
+      } else {
+        const wb = XLSX.read(ev.target.result, {type:"array"});
+        const {rows, skipped} = rowsFromWorkbook(wb);
+        loadRows(rows, skipped);
+      }
+    }catch(err){ alert("Fichier illisible : " + err.message); }
+  };
+  if(isJson) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+}
+
+function exportJSON(){
+  const blob = new Blob([JSON.stringify({skipped:SKIPPED, rows:ROWS}, null, 1)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "chronologie_acteurs.json"; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+setupSupports();
+render();
+window.addEventListener("resize", render);
+</script>
+
+</body>
+</html>
